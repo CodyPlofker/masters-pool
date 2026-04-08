@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { TIER_LABELS } from '@/lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 type Player = {
   id: string
   name: string
