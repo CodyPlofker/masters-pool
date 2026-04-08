@@ -8,13 +8,18 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Drop existing tables to apply fresh schema (safe — no important data yet)
+    await query`DROP TABLE IF EXISTS picks CASCADE`
+    await query`DROP TABLE IF EXISTS players CASCADE`
+    await query`DROP TABLE IF EXISTS draft_state CASCADE`
+
     await query`
       CREATE TABLE IF NOT EXISTS players (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name TEXT NOT NULL,
         espn_id TEXT,
         world_rank INT,
-        tier INT NOT NULL CHECK (tier BETWEEN 1 AND 7),
+        tier INT NOT NULL CHECK (tier BETWEEN 1 AND 6),
         is_liv BOOLEAN DEFAULT false,
         in_field BOOLEAN DEFAULT true,
         created_at TIMESTAMPTZ DEFAULT now()

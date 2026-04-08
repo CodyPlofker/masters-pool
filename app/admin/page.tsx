@@ -152,7 +152,7 @@ export default function AdminPage() {
     }
   }
 
-  const tierGroups = [1, 2, 3, 4, 5, 6, 7].map((tier) => ({
+  const tierGroups = [1, 2, 3, 4, 5, 6].map((tier) => ({
     tier,
     label: TIER_LABELS[tier],
     players: players.filter((p) => p.tier === tier && p.in_field),
@@ -288,11 +288,6 @@ export default function AdminPage() {
                   tierPlayers.map((player) => (
                     <div key={player.id} className="px-4 py-2.5 flex items-center gap-3 text-sm">
                       <span className="flex-1 font-medium" style={{ fontFamily: 'Georgia, serif' }}>{player.name}</span>
-                      {player.is_liv && (
-                        <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: '#fff3e0', color: '#e65100' }}>
-                          LIV
-                        </span>
-                      )}
                       <span className="text-xs text-gray-400">#{player.world_rank ?? '?'}</span>
                       <select
                         value={player.tier}
@@ -300,7 +295,7 @@ export default function AdminPage() {
                         className="border rounded px-1 py-0.5 text-xs"
                         style={{ borderColor: '#d4c9b0' }}
                       >
-                        {[1,2,3,4,5,6,7].map(t => <option key={t} value={t}>T{t}</option>)}
+                        {[1,2,3,4,5,6].map(t => <option key={t} value={t}>T{t}</option>)}
                       </select>
                       <button
                         onClick={() => toggleInField(player.id, player.in_field)}

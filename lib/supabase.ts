@@ -47,7 +47,6 @@ export const TIER_LABELS: Record<number, string> = {
   4: 'Ranks 31–40',
   5: 'Ranks 41–50',
   6: 'Ranks 51+',
-  7: 'LIV Tour',
 }
 
 export const PICKS_PER_TIER: Record<number, number> = {
@@ -57,14 +56,13 @@ export const PICKS_PER_TIER: Record<number, number> = {
   4: 1,
   5: 1,
   6: 2,
-  7: 1,
 }
 
 export function getDraftSchedule(firstDrafter: 'cody' | 'jeremy'): Array<{ tier: number; drafter: 'cody' | 'jeremy' }> {
   const second = firstDrafter === 'cody' ? 'jeremy' : 'cody'
   const schedule: Array<{ tier: number; drafter: 'cody' | 'jeremy' }> = []
 
-  const tiers = [1, 2, 3, 4, 5, 6, 7]
+  const tiers = [1, 2, 3, 4, 5, 6]
   tiers.forEach((tier, idx) => {
     const goesFirst = idx % 2 === 0 ? firstDrafter : second
     const goesSecond: 'cody' | 'jeremy' = goesFirst === 'cody' ? 'jeremy' : 'cody'

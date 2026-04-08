@@ -26,16 +26,16 @@ export async function POST(req: NextRequest) {
 
     // Insert players one by one (neon tagged template doesn't support bulk inserts easily)
     for (const p of field) {
-      const tier = assignTier(p.worldRank, p.isLiv)
+      const tier = assignTier(p.worldRank)
       await query`
         INSERT INTO players (name, espn_id, world_rank, tier, is_liv, in_field)
-        VALUES (${p.name}, ${p.id}, ${p.worldRank}, ${tier}, ${p.isLiv}, true)
+        VALUES (${p.name}, ${p.id}, ${p.worldRank}, ${tier}, false, true)
       `
     }
 
     const tierCounts: Record<number, number> = {}
     field.forEach((p) => {
-      const t = assignTier(p.worldRank, p.isLiv)
+      const t = assignTier(p.worldRank)
       tierCounts[t] = (tierCounts[t] || 0) + 1
     })
 

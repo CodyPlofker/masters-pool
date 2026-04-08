@@ -195,13 +195,7 @@ export function DraftBoard() {
                         {player.name}
                       </div>
                       <div className="text-xs text-gray-400 mt-0.5">
-                        {player.is_liv ? (
-                          <span className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: '#fff3e0', color: '#e65100' }}>
-                            LIV
-                          </span>
-                        ) : (
-                          <>Rank #{player.world_rank ?? '?'}</>
-                        )}
+                        Rank #{player.world_rank ?? '?'}
                       </div>
                     </div>
                     <button
