@@ -49,6 +49,28 @@ export default function AdminPage() {
     if (res.ok) setDraftState(await res.json())
   }
 
+  async function initDb() {
+    setLoading(true)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/admin/init', {
+        method: 'POST',
+        headers: { 'x-admin-key': adminKey },
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Database tables created! Now seed players.' })
+        fetchDraftState()
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Init failed' })
+      }
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e.message })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function seedPlayers() {
     setLoading(true)
     setMessage(null)
@@ -199,12 +221,20 @@ export default function AdminPage() {
 
         <div className="flex flex-wrap gap-3 items-end">
           <button
+            onClick={initDb}
+            disabled={loading}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 opacity-70"
+            style={{ backgroundColor: '#555' }}
+          >
+            {loading ? 'Loading...' : '① Initialize Database (first time only)'}
+          </button>
+          <button
             onClick={seedPlayers}
             disabled={loading}
             className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
             style={{ backgroundColor: 'var(--masters-green)' }}
           >
-            {loading ? 'Loading...' : '↻ Seed / Refresh Players from ESPN'}
+            {loading ? 'Loading...' : '② Seed / Refresh Players from ESPN'}
           </button>
         </div>
 
@@ -226,7 +256,7 @@ export default function AdminPage() {
             disabled={loading}
             className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white disabled:opacity-50 hover:bg-red-700"
           >
-            Reset Draft
+            ③ Reset Draft
           </button>
         </div>
       </div>

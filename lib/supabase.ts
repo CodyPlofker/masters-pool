@@ -1,24 +1,4 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
-
-let _supabase: SupabaseClient | null = null
-
-function getSupabase(): SupabaseClient {
-  if (!_supabase) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    if (!url || !key) throw new Error('Supabase env vars not set')
-    _supabase = createClient(url, key)
-  }
-  return _supabase
-}
-
-export const supabase = new Proxy({} as SupabaseClient, {
-  get(_, prop) {
-    const client = getSupabase()
-    const val = (client as any)[prop]
-    return typeof val === 'function' ? val.bind(client) : val
-  },
-})
+// Types and shared helpers (no Supabase dependency — using Neon/Postgres directly via lib/db.ts)
 
 export type Player = {
   id: string
@@ -53,7 +33,7 @@ export type LiveScore = {
   espn_id: string
   name: string
   position: string
-  total_score: number // strokes to par (negative = under par)
+  total_score: number
   today: number
   thru: string
   status: 'active' | 'cut' | 'wd' | 'complete'
@@ -80,9 +60,6 @@ export const PICKS_PER_TIER: Record<number, number> = {
   7: 1,
 }
 
-// Snake draft order: for each tier, who picks first?
-// Tier 1 → first_drafter, Tier 2 → second, Tier 3 → first, ...
-// For Tier 6 (2 picks each): first-first, first-second, second-second, second-first (snake within)
 export function getDraftSchedule(firstDrafter: 'cody' | 'jeremy'): Array<{ tier: number; drafter: 'cody' | 'jeremy' }> {
   const second = firstDrafter === 'cody' ? 'jeremy' : 'cody'
   const schedule: Array<{ tier: number; drafter: 'cody' | 'jeremy' }> = []
@@ -90,15 +67,13 @@ export function getDraftSchedule(firstDrafter: 'cody' | 'jeremy'): Array<{ tier:
   const tiers = [1, 2, 3, 4, 5, 6, 7]
   tiers.forEach((tier, idx) => {
     const goesFirst = idx % 2 === 0 ? firstDrafter : second
-    const goesSecond = goesFirst === 'cody' ? 'jeremy' : 'cody'
+    const goesSecond: 'cody' | 'jeremy' = goesFirst === 'cody' ? 'jeremy' : 'cody'
     const count = PICKS_PER_TIER[tier]
 
     if (count === 1) {
       schedule.push({ tier, drafter: goesFirst })
       schedule.push({ tier, drafter: goesSecond })
     } else {
-      // Tier 6: 2 picks each — snake within tier
-      // goesFirst picks 1, goesSecond picks 1, goesSecond picks 2, goesFirst picks 2
       schedule.push({ tier, drafter: goesFirst })
       schedule.push({ tier, drafter: goesSecond })
       schedule.push({ tier, drafter: goesSecond })

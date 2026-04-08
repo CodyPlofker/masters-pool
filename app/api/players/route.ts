@@ -1,29 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { query } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   const tier = req.nextUrl.searchParams.get('tier')
 
-  let query = supabase
-    .from('players')
-    .select('*')
-    .eq('in_field', true)
-    .order('world_rank', { ascending: true, nullsFirst: false })
+  try {
+    const rows = tier
+      ? await query`
+          SELECT * FROM players
+          WHERE in_field = true
+            AND tier = ${parseInt(tier)}
+            AND id NOT IN (SELECT player_id FROM picks)
+          ORDER BY world_rank ASC NULLS LAST
+        `
+      : await query`
+          SELECT * FROM players
+          WHERE in_field = true
+            AND id NOT IN (SELECT player_id FROM picks)
+          ORDER BY tier ASC, world_rank ASC NULLS LAST
+        `
 
-  if (tier) {
-    query = query.eq('tier', parseInt(tier))
+    return NextResponse.json(rows)
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
-
-  // Exclude already-picked players
-  const { data: pickedIds } = await supabase.from('picks').select('player_id')
-  const ids = (pickedIds || []).map((p: any) => p.player_id)
-
-  if (ids.length > 0) {
-    query = query.not('id', 'in', `(${ids.join(',')})`)
-  }
-
-  const { data, error } = await query
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
 }
