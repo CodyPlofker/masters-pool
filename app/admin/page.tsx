@@ -23,17 +23,20 @@ export default function AdminPage() {
   const [draftState, setDraftState] = useState<any>(null)
 
   async function authenticate() {
-    // Verify by fetching players
     setLoading(true)
     try {
-      const res = await fetch('/api/admin/players', {
+      // Verify key against a lightweight endpoint (no DB dependency)
+      const res = await fetch('/api/admin/verify', {
         headers: { 'x-admin-key': adminKey },
       })
       if (res.ok) {
         setAuthed(true)
-        const data = await res.json()
-        setPlayers(data)
         fetchDraftState()
+        // Load players (may fail if DB not initialized yet — that's fine)
+        const playersRes = await fetch('/api/admin/players', {
+          headers: { 'x-admin-key': adminKey },
+        })
+        if (playersRes.ok) setPlayers(await playersRes.json())
       } else {
         setMessage({ type: 'error', text: 'Invalid admin key' })
       }
