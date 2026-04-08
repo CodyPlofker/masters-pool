@@ -28,6 +28,16 @@ type Pick = {
   player: Player
 }
 
+type PlayerStats = {
+  name: string
+  seasonWins: number | null
+  seasonTop10: number | null
+  scoringAvg: string | null
+  recent: { event: string; date: string; position: string; score: string }[]
+  trend: 'hot' | 'warm' | 'cold' | 'unknown'
+  headline: string | null
+}
+
 export function DraftBoard() {
   const [draftState, setDraftState] = useState<DraftState | null>(null)
   const [availablePlayers, setAvailablePlayers] = useState<Player[]>([])
@@ -36,6 +46,23 @@ export function DraftBoard() {
   const [picking, setPicking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [statsCache, setStatsCache] = useState<Record<string, PlayerStats | 'loading' | 'error'>>({})
+
+  async function toggleStats(playerId: string) {
+    if (expanded === playerId) { setExpanded(null); return }
+    setExpanded(playerId)
+    if (statsCache[playerId] && statsCache[playerId] !== 'error') return
+    setStatsCache((c) => ({ ...c, [playerId]: 'loading' }))
+    try {
+      const res = await fetch(`/api/players/${playerId}/stats`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setStatsCache((c) => ({ ...c, [playerId]: data }))
+    } catch {
+      setStatsCache((c) => ({ ...c, [playerId]: 'error' }))
+    }
+  }
 
   const loadDraftData = useCallback(async () => {
     try {
@@ -188,26 +215,81 @@ export function DraftBoard() {
                   <a href="/admin" className="underline" style={{ color: 'var(--masters-green)' }}>Seed players →</a>
                 </div>
               ) : (
-                availablePlayers.map((player) => (
-                  <div key={player.id} className="px-4 py-3 flex items-center justify-between hover:bg-green-50 transition-colors">
-                    <div>
-                      <div className="font-semibold text-sm" style={{ fontFamily: 'Georgia, serif' }}>
-                        {player.name}
+                availablePlayers.map((player) => {
+                  const stats = statsCache[player.id]
+                  const isOpen = expanded === player.id
+                  return (
+                  <div key={player.id}>
+                    <div className="px-4 py-3 flex items-center justify-between hover:bg-green-50 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm" style={{ fontFamily: 'Georgia, serif' }}>
+                          {player.name}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          Rank #{player.world_rank ?? '?'}
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        Rank #{player.world_rank ?? '?'}
-                      </div>
+                      <button
+                        onClick={() => toggleStats(player.id)}
+                        className="px-2 py-1.5 text-xs text-gray-500 hover:text-green-800 mr-2"
+                      >
+                        {isOpen ? '▲' : 'Stats ▾'}
+                      </button>
+                      <button
+                        onClick={() => makePick(player.id, player.name)}
+                        disabled={picking}
+                        className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-50"
+                        style={{ backgroundColor: 'var(--masters-green)' }}
+                      >
+                        {picking ? '...' : 'Pick'}
+                      </button>
                     </div>
-                    <button
-                      onClick={() => makePick(player.id, player.name)}
-                      disabled={picking}
-                      className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-50"
-                      style={{ backgroundColor: 'var(--masters-green)' }}
-                    >
-                      {picking ? '...' : 'Pick'}
-                    </button>
+                    {isOpen && (
+                      <div className="px-4 pb-4 bg-green-50/40 border-t text-xs" style={{ borderColor: '#ece6d9' }}>
+                        {stats === 'loading' || !stats ? (
+                          <div className="py-3 text-gray-400">Loading stats...</div>
+                        ) : stats === 'error' ? (
+                          <div className="py-3 text-red-500">Couldn't load stats</div>
+                        ) : (
+                          <div className="py-3 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                                stats.trend === 'hot' ? 'bg-red-100 text-red-700' :
+                                stats.trend === 'warm' ? 'bg-yellow-100 text-yellow-800' :
+                                stats.trend === 'cold' ? 'bg-blue-100 text-blue-700' :
+                                'bg-gray-100 text-gray-500'
+                              }`}>
+                                {stats.trend === 'hot' ? '🔥 Hot' : stats.trend === 'warm' ? 'Warm' : stats.trend === 'cold' ? '❄ Cold' : 'Unknown form'}
+                              </span>
+                              {stats.seasonWins != null && (
+                                <span className="text-gray-600">
+                                  {stats.seasonWins} W · {stats.seasonTop10} T10{stats.scoringAvg ? ` · ${stats.scoringAvg} avg` : ''}
+                                </span>
+                              )}
+                            </div>
+                            {stats.recent.length > 0 && (
+                              <div>
+                                <div className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Recent finishes</div>
+                                <div className="space-y-0.5">
+                                  {stats.recent.map((f, i) => (
+                                    <div key={i} className="flex justify-between gap-2">
+                                      <span className="truncate text-gray-700">{f.event}</span>
+                                      <span className="font-semibold text-gray-800 flex-shrink-0">{f.position} <span className="text-gray-400">({f.score})</span></span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {stats.headline && (
+                              <div className="text-gray-500 italic truncate">📰 {stats.headline}</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                ))
+                  )
+                })
               )}
             </div>
           </div>
