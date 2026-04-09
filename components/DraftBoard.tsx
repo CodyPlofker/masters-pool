@@ -48,6 +48,21 @@ export function DraftBoard() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [statsCache, setStatsCache] = useState<Record<string, PlayerStats | 'loading' | 'error'>>({})
+  const [identity, setIdentity] = useState<'cody' | 'jeremy' | null>(null)
+
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('masters-pool-identity') : null
+    if (saved === 'cody' || saved === 'jeremy') setIdentity(saved)
+  }, [])
+
+  function chooseIdentity(who: 'cody' | 'jeremy') {
+    localStorage.setItem('masters-pool-identity', who)
+    setIdentity(who)
+  }
+  function clearIdentity() {
+    localStorage.removeItem('masters-pool-identity')
+    setIdentity(null)
+  }
 
   async function toggleStats(playerId: string) {
     if (expanded === playerId) { setExpanded(null); return }
@@ -102,6 +117,11 @@ export function DraftBoard() {
 
   async function makePick(playerId: string, playerName: string) {
     if (picking) return
+    if (!identity) { setError('Pick who you are first.'); return }
+    if (draftState && identity !== draftState.current_drafter) {
+      setError(`It's ${draftState.current_drafter}'s turn, not yours.`)
+      return
+    }
     setPicking(true)
     setError(null)
     setSuccessMsg(null)
@@ -142,6 +162,25 @@ export function DraftBoard() {
 
   if (!draftState) return null
 
+  if (!identity) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-16">
+        <div className="rounded-2xl border-2 p-8 text-center shadow-lg" style={{ borderColor: 'var(--masters-green)', background: '#fff' }}>
+          <div className="text-5xl mb-3">⛳</div>
+          <h2 className="text-2xl font-bold mb-2" style={{ fontFamily: 'Georgia, serif', color: 'var(--masters-green)' }}>
+            Who are you?
+          </h2>
+          <p className="text-sm text-gray-500 mb-6">Pick yourself so we know whose turn it is. We'll remember on this device.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => chooseIdentity('cody')} className="py-4 rounded-xl font-bold text-white text-lg" style={{ background: 'var(--masters-green)' }}>Cody</button>
+            <button onClick={() => chooseIdentity('jeremy')} className="py-4 rounded-xl font-bold text-white text-lg" style={{ background: 'var(--masters-green)' }}>Jeremy</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const isMyTurn = identity === draftState.current_drafter
   const schedule = getDraftSchedule(draftState.first_drafter)
   const currentPickIndex = draftState.current_pick_order - 1
 
@@ -166,6 +205,14 @@ export function DraftBoard() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+
+      {/* Identity bar */}
+      <div className="flex items-center justify-between text-xs text-gray-600">
+        <div>
+          You are <span className="font-bold" style={{ color: 'var(--masters-green)' }}>{identity === 'cody' ? 'Cody' : 'Jeremy'}</span>
+        </div>
+        <button onClick={clearIdentity} className="underline hover:text-gray-800">Not you? Switch</button>
+      </div>
 
       {/* Current pick banner */}
       <div className="rounded-xl p-5 text-white text-center shadow-md"
@@ -237,11 +284,12 @@ export function DraftBoard() {
                       </button>
                       <button
                         onClick={() => makePick(player.id, player.name)}
-                        disabled={picking}
-                        className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-50"
+                        disabled={picking || !isMyTurn}
+                        title={!isMyTurn ? `Waiting for ${drafterName}` : ''}
+                        className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                         style={{ backgroundColor: 'var(--masters-green)' }}
                       >
-                        {picking ? '...' : 'Pick'}
+                        {picking ? '...' : isMyTurn ? 'Pick' : 'Wait'}
                       </button>
                     </div>
                     {isOpen && (
