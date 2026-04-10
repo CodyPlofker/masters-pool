@@ -22,8 +22,8 @@ export async function GET() {
             l.name.toLowerCase() === pick.player_name.toLowerCase()
         )
         const contribution =
-          live && live.status !== 'cut' && live.status !== 'wd' && live.total_score < 0
-            ? Math.abs(live.total_score)
+          live && live.status !== 'cut' && live.status !== 'wd'
+            ? live.total_score
             : 0
 
         return {

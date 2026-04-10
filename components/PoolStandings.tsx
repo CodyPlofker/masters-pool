@@ -62,7 +62,7 @@ export function PoolStandings() {
   if (!data) return null
 
   const { cody, jeremy } = data.pool
-  const codyWinning = cody.score > jeremy.score
+  const codyWinning = cody.score < jeremy.score
   const tied = cody.score === jeremy.score
   const noPicks = cody.picks.length === 0 && jeremy.picks.length === 0
 
@@ -94,11 +94,13 @@ export function PoolStandings() {
                 </div>
                 <div
                   className="text-5xl font-bold font-mono leading-none"
-                  style={{ color: personData.score > 0 ? 'var(--score-red)' : 'var(--score-black)', fontFamily: 'Georgia, serif' }}
+                  style={{ color: personData.score < 0 ? 'var(--score-red)' : 'var(--score-black)', fontFamily: 'Georgia, serif' }}
                 >
-                  {personData.score > 0 ? `+${personData.score}` : personData.score === 0 ? '0' : personData.score}
+                  {personData.score > 0 ? `+${personData.score}` : personData.score === 0 ? 'E' : personData.score}
                 </div>
-                <div className="text-xs text-gray-400 mt-1">under par</div>
+                <div className="text-xs text-gray-400 mt-1">
+                  {personData.score < 0 ? 'under par' : personData.score > 0 ? 'over par' : 'even par'}
+                </div>
                 <div className="text-xs text-gray-500 mt-2">{personData.picks.length} / 8 picks</div>
               </div>
             )
@@ -129,7 +131,7 @@ export function PoolStandings() {
                 <span className="text-white font-bold text-sm">{label}'s Team</span>
                 <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded"
                   style={{ backgroundColor: 'var(--masters-gold)', color: '#1a1a1a' }}>
-                  {personData.score > 0 ? `+${personData.score}` : personData.score} pts
+                  {personData.score > 0 ? `+${personData.score}` : personData.score === 0 ? 'E' : personData.score} pts
                 </span>
               </div>
 
@@ -168,8 +170,8 @@ export function PoolStandings() {
                           <div className="flex flex-col items-end ml-3 gap-0.5">
                             <ScoreBadge score={live?.total_score ?? null} status={live?.status} />
                             {!isMC && live && (
-                              <span className="text-xs font-mono" style={{ color: contribution > 0 ? 'var(--score-red)' : '#aaa' }}>
-                                {contribution > 0 ? `+${contribution} pts` : '0 pts'}
+                              <span className="text-xs font-mono" style={{ color: contribution < 0 ? 'var(--score-red)' : contribution > 0 ? '#c00' : '#aaa' }}>
+                                {contribution < 0 ? `${contribution} pts` : contribution > 0 ? `+${contribution} pts` : 'E'}
                               </span>
                             )}
                           </div>
