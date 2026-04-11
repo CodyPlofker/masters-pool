@@ -273,7 +273,7 @@ export function FamilyGame() {
                 onChange={(e) => setPlayerName(e.target.value)}
                 placeholder="e.g. Mom, Dad, Grandpa..."
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2"
-                style={{ borderColor: '#d4c9b0', focusRingColor: 'var(--masters-green)' }}
+                style={{ borderColor: '#d4c9b0' }}
                 required
               />
             </div>
