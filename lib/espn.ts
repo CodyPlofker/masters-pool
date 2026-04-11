@@ -44,7 +44,7 @@ export async function fetchMastersLeaderboard(): Promise<LiveScore[]> {
   if (!competition) return []
   const competitors: any[] = competition.competitors || []
 
-  return competitors.map((c: any) => {
+  const scores: LiveScore[] = competitors.map((c: any) => {
     // Rounds
     const linescores = c.linescores || []
     const rounds = linescores
@@ -98,6 +98,41 @@ export async function fetchMastersLeaderboard(): Promise<LiveScore[]> {
       rounds,
     }
   })
+
+  // ESPN's competitor-level status is sometimes null (seen during active rounds),
+  // leaving `position` empty. Derive leaderboard rank from total_score for any
+  // active/complete golfer missing a position, using standard "T" tie notation.
+  const needsRank = scores.filter(
+    (s) => !s.position && s.status !== 'cut' && s.status !== 'wd',
+  )
+  if (needsRank.length > 0) {
+    const sorted = [...needsRank].sort((a, b) => a.total_score - b.total_score)
+    const rankById = new Map<string, string>()
+    for (let i = 0; i < sorted.length; i++) {
+      const rank = i + 1
+      const score = sorted[i].total_score
+      const tied =
+        (i > 0 && sorted[i - 1].total_score === score) ||
+        (i < sorted.length - 1 && sorted[i + 1].total_score === score)
+      // For ties, everyone in the tie group shares the rank of the first tied player
+      let displayRank = rank
+      if (tied) {
+        let firstInGroup = i
+        while (firstInGroup > 0 && sorted[firstInGroup - 1].total_score === score) {
+          firstInGroup--
+        }
+        displayRank = firstInGroup + 1
+      }
+      rankById.set(sorted[i].espn_id, tied ? `T${displayRank}` : `${displayRank}`)
+    }
+    return scores.map((s) => {
+      if (s.position) return s
+      const rank = rankById.get(s.espn_id)
+      return rank ? { ...s, position: rank } : s
+    })
+  }
+
+  return scores
 }
 
 export async function fetchMastersField(): Promise<ESPNPlayer[]> {
