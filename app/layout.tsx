@@ -30,6 +30,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <a href="/draft" className="text-white hover:opacity-80 transition-opacity font-medium">
                 Draft
               </a>
+              <a href="/game" className="text-white hover:opacity-80 transition-opacity font-medium">
+                Family Game
+              </a>
               <a href="/admin" className="opacity-50 text-white hover:opacity-70 transition-opacity text-xs pt-0.5">
                 Admin
               </a>
