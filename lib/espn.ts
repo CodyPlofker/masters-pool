@@ -43,8 +43,9 @@ export async function fetchMastersLeaderboard(): Promise<LiveScore[]> {
   const competition = masters.competitions?.[0]
   if (!competition) return []
   const competitors: any[] = competition.competitors || []
+  const currentPeriod: number = competition?.status?.period ?? 0
 
-  const scores: LiveScore[] = competitors.map((c: any) => {
+  let scores: LiveScore[] = competitors.map((c: any) => {
     // Rounds
     const linescores = c.linescores || []
     const rounds = linescores
@@ -99,6 +100,35 @@ export async function fetchMastersLeaderboard(): Promise<LiveScore[]> {
     }
   })
 
+  // Masters cut rule: top 50 and ties after R2. ESPN's competitor-level status
+  // is sometimes null during live rounds so we can't rely on it to detect cut
+  // players. Once the tournament has reached R3 (period >= 3), compute each
+  // golfer's R1+R2 stroke total from linescores and mark anyone outside the
+  // top-50-and-ties as cut.
+  if (currentPeriod >= 3) {
+    const r2Totals = competitors
+      .map((c: any, i: number) => {
+        const ls = c.linescores || []
+        const r1 = typeof ls[0]?.value === 'number' ? ls[0].value : 0
+        const r2 = typeof ls[1]?.value === 'number' ? ls[1].value : 0
+        return { index: i, total: r1 + r2, r1, r2, status: scores[i].status }
+      })
+      // Only players who actually finished R1 and R2 are eligible for cut math.
+      // WD golfers keep their existing status untouched.
+      .filter((x) => x.r1 > 0 && x.r2 > 0 && x.status !== 'wd')
+      .sort((a, b) => a.total - b.total)
+
+    if (r2Totals.length > 50) {
+      const cutThreshold = r2Totals[49].total // 50th place
+      const cutIndices = new Set(
+        r2Totals.filter((x) => x.total > cutThreshold).map((x) => x.index),
+      )
+      scores = scores.map((s, i) =>
+        cutIndices.has(i) ? { ...s, status: 'cut' as const, position: 'CUT' } : s,
+      )
+    }
+  }
+
   // ESPN's competitor-level status is sometimes null (seen during active rounds),
   // leaving `position` empty. Derive leaderboard rank from total_score for any
   // active/complete golfer missing a position, using standard "T" tie notation.
@@ -125,7 +155,7 @@ export async function fetchMastersLeaderboard(): Promise<LiveScore[]> {
       }
       rankById.set(sorted[i].espn_id, tied ? `T${displayRank}` : `${displayRank}`)
     }
-    return scores.map((s) => {
+    scores = scores.map((s) => {
       if (s.position) return s
       const rank = rankById.get(s.espn_id)
       return rank ? { ...s, position: rank } : s
