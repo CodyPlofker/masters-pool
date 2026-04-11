@@ -25,13 +25,28 @@ export async function POST(req: NextRequest) {
 
     const normalizedName = player_name.trim().toLowerCase()
 
-    // Check max 3 picks per (player_name, round)
-    const existing = await query`
-      SELECT id FROM game_picks
+    // Enforce: exactly 2 longs + 1 short per (player_name, round).
+    // Max 2 longs, max 1 short, max 3 total.
+    const existing = await query<{ direction: 'long' | 'short' }>`
+      SELECT direction FROM game_picks
       WHERE player_name = ${normalizedName} AND round = ${round}
     `
+    const longCount = existing.filter((p) => p.direction === 'long').length
+    const shortCount = existing.filter((p) => p.direction === 'short').length
     if (existing.length >= 3) {
       return NextResponse.json({ error: 'You already have 3 picks for this round' }, { status: 400 })
+    }
+    if (direction === 'long' && longCount >= 2) {
+      return NextResponse.json(
+        { error: 'You already have 2 long picks — only a short pick is allowed' },
+        { status: 400 },
+      )
+    }
+    if (direction === 'short' && shortCount >= 1) {
+      return NextResponse.json(
+        { error: 'You already have a short pick — only long picks are allowed' },
+        { status: 400 },
+      )
     }
 
     // Look up golfer on live leaderboard for starting position

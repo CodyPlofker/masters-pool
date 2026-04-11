@@ -84,6 +84,24 @@ export function FamilyGame() {
     return () => clearInterval(interval)
   }, [fetchData])
 
+  // Keep the selected direction within the 2 longs + 1 short cap for the
+  // current player/round, auto-flipping if the current selection is maxed.
+  useEffect(() => {
+    if (!data) return
+    const name = playerName.trim().toLowerCase()
+    if (!name) return
+    const mine = data.allPicks.filter(
+      (p) => p.player_name === name && p.round === selectedRound,
+    )
+    const longs = mine.filter((p) => p.direction === 'long').length
+    const shorts = mine.filter((p) => p.direction === 'short').length
+    if (direction === 'long' && longs >= 2 && shorts < 1) {
+      setDirection('short')
+    } else if (direction === 'short' && shorts >= 1 && longs < 2) {
+      setDirection('long')
+    }
+  }, [data, playerName, selectedRound, direction])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!playerName.trim() || !selectedGolfer) return
@@ -140,14 +158,20 @@ export function FamilyGame() {
 
   const { activeGolfers, leaderboard, allPicks } = data
 
-  // Build a lookup: player_name + round → picks
-  function picksFor(name: string, round: number) {
-    return allPicks.filter(
-      (p) => p.player_name === name.trim().toLowerCase() && p.round === round
-    )
-  }
-
-  const allPlayerNames = [...new Set(allPicks.map((p) => p.player_name))].sort()
+  // Current form user's picks for the selected round (used to show remaining
+  // longs/shorts and disable buttons once a cap is hit).
+  const normalizedFormName = playerName.trim().toLowerCase()
+  const myRoundPicks = normalizedFormName
+    ? allPicks.filter(
+        (p) => p.player_name === normalizedFormName && p.round === selectedRound,
+      )
+    : []
+  const myLongs = myRoundPicks.filter((p) => p.direction === 'long').length
+  const myShorts = myRoundPicks.filter((p) => p.direction === 'short').length
+  const longsRemaining = Math.max(0, 2 - myLongs)
+  const shortsRemaining = Math.max(0, 1 - myShorts)
+  const longDisabled = longsRemaining === 0
+  const shortDisabled = shortsRemaining === 0
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
@@ -192,10 +216,26 @@ export function FamilyGame() {
         )}
       </div>
 
-      {/* All picks by round */}
+      {/* All picks by round, grouped by player */}
       {[3, 4].map((round) => {
         const roundPicks = allPicks.filter((p) => p.round === round)
         if (roundPicks.length === 0 && round === 4) return null
+
+        // Group by player, sorted by round subtotal descending
+        const byPlayer = new Map<string, GamePick[]>()
+        for (const pick of roundPicks) {
+          const arr = byPlayer.get(pick.player_name) || []
+          arr.push(pick)
+          byPlayer.set(pick.player_name, arr)
+        }
+        const playerGroups = [...byPlayer.entries()]
+          .map(([name, picks]) => ({
+            name,
+            picks,
+            subtotal: Math.round(picks.reduce((s, p) => s + p.score, 0) * 10) / 10,
+          }))
+          .sort((a, b) => b.subtotal - a.subtotal)
+
         return (
           <div key={round} className="rounded-xl overflow-hidden shadow-sm" style={{ border: '1px solid #d4c9b0' }}>
             <div className="px-4 py-2.5" style={{ backgroundColor: 'var(--masters-green)' }}>
@@ -204,53 +244,110 @@ export function FamilyGame() {
             {roundPicks.length === 0 ? (
               <div className="bg-white py-6 text-center text-sm text-gray-400">No picks yet for Round {round}</div>
             ) : (
-              <div className="bg-white divide-y" style={{ borderColor: '#ece6d9' }}>
-                {roundPicks.map((pick) => {
-                  const moved = pick.current_position !== null
-                    ? pick.starting_position - pick.current_position
-                    : null
-                  const isShort = pick.direction === 'short'
-                  return (
-                    <div key={pick.id} className="px-4 py-3 flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold capitalize text-sm" style={{ fontFamily: 'Georgia, serif' }}>
-                            {pick.player_name}
-                          </span>
-                          <span
-                            className="text-xs px-1.5 py-0.5 rounded font-semibold"
-                            style={{
-                              backgroundColor: isShort ? '#fff0f0' : '#eef7f0',
-                              color: isShort ? '#c00' : 'var(--masters-green)',
-                            }}
-                          >
-                            {isShort ? '↓ SHORT' : '↑ LONG'}
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-500 mt-0.5">
-                          {pick.golfer_name}
-                          {' · '}
-                          Started {ordinal(pick.starting_position)}
-                          {pick.current_position !== null && (
-                            <> → Now {ordinal(pick.current_position)}
-                              {moved !== null && moved !== 0 && (
-                                <span style={{ color: moved > 0 ? 'var(--masters-green)' : '#c00' }}>
-                                  {' '}({moved > 0 ? `↑${moved}` : `↓${Math.abs(moved)}`})
-                                </span>
-                              )}
-                            </>
-                          )}
-                        </div>
+              <div className="bg-white">
+                {playerGroups.map((group, gi) => (
+                  <div
+                    key={group.name}
+                    style={{ borderTop: gi > 0 ? '1px solid #d4c9b0' : 'none' }}
+                  >
+                    {/* Player header */}
+                    <div
+                      className="px-4 py-2 flex items-center justify-between"
+                      style={{ backgroundColor: '#f8f5ee' }}
+                    >
+                      <div className="flex items-baseline gap-2 min-w-0">
+                        <span
+                          className="font-semibold capitalize text-sm truncate"
+                          style={{ fontFamily: 'Georgia, serif' }}
+                        >
+                          {group.name}
+                        </span>
+                        <span className="text-[10px] text-gray-400 flex-shrink-0">
+                          {group.picks.length} pick{group.picks.length !== 1 ? 's' : ''}
+                        </span>
                       </div>
-                      <div
-                        className="text-lg font-bold font-mono"
-                        style={{ color: pick.score > 0 ? 'var(--masters-green)' : pick.score < 0 ? '#c00' : '#aaa' }}
+                      <span
+                        className="text-sm font-bold font-mono flex-shrink-0"
+                        style={{
+                          color:
+                            group.subtotal > 0
+                              ? 'var(--masters-green)'
+                              : group.subtotal < 0
+                                ? '#c00'
+                                : '#aaa',
+                        }}
                       >
-                        {fmtScore(pick.score)}
-                      </div>
+                        {fmtScore(group.subtotal)}
+                      </span>
                     </div>
-                  )
-                })}
+                    {/* Pick rows */}
+                    <div className="divide-y" style={{ borderColor: '#f0ebdf' }}>
+                      {group.picks.map((pick) => {
+                        const moved =
+                          pick.current_position !== null
+                            ? pick.starting_position - pick.current_position
+                            : null
+                        const isShort = pick.direction === 'short'
+                        return (
+                          <div
+                            key={pick.id}
+                            className="px-4 py-2 flex items-center gap-2.5"
+                          >
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded font-semibold flex-shrink-0"
+                              style={{
+                                backgroundColor: isShort ? '#fff0f0' : '#eef7f0',
+                                color: isShort ? '#c00' : 'var(--masters-green)',
+                              }}
+                            >
+                              {isShort ? '↓ SHORT' : '↑ LONG'}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs text-gray-800 truncate">
+                                {pick.golfer_name}
+                              </div>
+                              <div className="text-[10px] text-gray-500">
+                                Started {ordinal(pick.starting_position)}
+                                {pick.current_position !== null && (
+                                  <>
+                                    {' → Now '}
+                                    {ordinal(pick.current_position)}
+                                    {moved !== null && moved !== 0 && (
+                                      <span
+                                        style={{
+                                          color:
+                                            moved > 0
+                                              ? 'var(--masters-green)'
+                                              : '#c00',
+                                        }}
+                                      >
+                                        {' '}
+                                        ({moved > 0 ? `↑${moved}` : `↓${Math.abs(moved)}`})
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <div
+                              className="text-base font-bold font-mono flex-shrink-0"
+                              style={{
+                                color:
+                                  pick.score > 0
+                                    ? 'var(--masters-green)'
+                                    : pick.score < 0
+                                      ? '#c00'
+                                      : '#aaa',
+                              }}
+                            >
+                              {fmtScore(pick.score)}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -261,7 +358,7 @@ export function FamilyGame() {
       <div className="rounded-xl overflow-hidden shadow-sm" style={{ border: '1px solid #d4c9b0' }}>
         <div className="px-4 py-2.5" style={{ backgroundColor: 'var(--masters-green)' }}>
           <span className="text-white font-bold text-sm">Make Your Picks</span>
-          <span className="text-xs ml-2" style={{ color: 'var(--masters-gold)' }}>3 per round · Long or Short</span>
+          <span className="text-xs ml-2" style={{ color: 'var(--masters-gold)' }}>2 longs + 1 short per round</span>
         </div>
         <form onSubmit={handleSubmit} className="bg-white px-4 py-4 space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -313,31 +410,43 @@ export function FamilyGame() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Direction</label>
-            <div className="flex gap-3">
+            <div className="flex items-baseline justify-between mb-2">
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Direction
+              </label>
+              {normalizedFormName && (
+                <span className="text-[10px] text-gray-400">
+                  {longsRemaining} long{longsRemaining !== 1 ? 's' : ''} · {shortsRemaining} short
+                  {shortsRemaining !== 1 ? 's' : ''} left
+                </span>
+              )}
+            </div>
+            <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setDirection('long')}
-                className="flex-1 py-2 rounded-lg text-sm font-semibold border-2 transition-all"
+                onClick={() => !longDisabled && setDirection('long')}
+                disabled={longDisabled}
+                className="flex-1 py-2 rounded-lg text-xs sm:text-sm font-semibold border-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{
-                  borderColor: direction === 'long' ? 'var(--masters-green)' : '#d4c9b0',
-                  backgroundColor: direction === 'long' ? '#eef7f0' : 'white',
-                  color: direction === 'long' ? 'var(--masters-green)' : '#666',
+                  borderColor: direction === 'long' && !longDisabled ? 'var(--masters-green)' : '#d4c9b0',
+                  backgroundColor: direction === 'long' && !longDisabled ? '#eef7f0' : 'white',
+                  color: direction === 'long' && !longDisabled ? 'var(--masters-green)' : '#666',
                 }}
               >
                 ↑ Long (climbs)
               </button>
               <button
                 type="button"
-                onClick={() => setDirection('short')}
-                className="flex-1 py-2 rounded-lg text-sm font-semibold border-2 transition-all"
+                onClick={() => !shortDisabled && setDirection('short')}
+                disabled={shortDisabled}
+                className="flex-1 py-2 rounded-lg text-xs sm:text-sm font-semibold border-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{
-                  borderColor: direction === 'short' ? '#c00' : '#d4c9b0',
-                  backgroundColor: direction === 'short' ? '#fff0f0' : 'white',
-                  color: direction === 'short' ? '#c00' : '#666',
+                  borderColor: direction === 'short' && !shortDisabled ? '#c00' : '#d4c9b0',
+                  backgroundColor: direction === 'short' && !shortDisabled ? '#fff0f0' : 'white',
+                  color: direction === 'short' && !shortDisabled ? '#c00' : '#666',
                 }}
               >
-                ↓ Short (falls) — 2× penalty if wrong
+                ↓ Short — 2× penalty
               </button>
             </div>
           </div>
@@ -368,7 +477,7 @@ export function FamilyGame() {
         <div className="font-semibold text-gray-700 mb-2">How scoring works</div>
         <div><strong>Long:</strong> Score = (start pos − end pos) / start pos × 100. e.g. 60th → 20th = +66.7 pts</div>
         <div><strong>Short:</strong> Same formula reversed. e.g. short 60th, falls to 80th = +33.3 pts. But if they climb instead, penalty is 2×.</div>
-        <div className="mt-1 text-gray-400">3 picks per person per round. Cumulative across R3 + R4.</div>
+        <div className="mt-1 text-gray-400">Each person picks 2 longs and 1 short per round. Cumulative across R3 + R4.</div>
       </div>
 
       {lastUpdated && (
