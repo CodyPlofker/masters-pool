@@ -182,7 +182,7 @@ export function FamilyGame() {
                 </div>
                 <div
                   className="text-2xl font-bold font-mono"
-                  style={{ color: entry.total > 0 ? 'var(--score-red)' : entry.total < 0 ? '#c00' : '#aaa', fontFamily: 'Georgia, serif' }}
+                  style={{ color: entry.total > 0 ? 'var(--masters-green)' : entry.total < 0 ? '#c00' : '#aaa', fontFamily: 'Georgia, serif' }}
                 >
                   {fmtScore(entry.total)}
                 </div>
