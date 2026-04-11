@@ -81,6 +81,10 @@ export function PoolStandings() {
             const isWinning = person === 'cody' ? codyWinning : !codyWinning
             const label = person === 'cody' ? 'Cody' : 'Jeremy'
 
+            const todayScore = personData.picks
+              .filter((p: any) => p.live && p.live.status !== 'cut' && p.live.status !== 'wd')
+              .reduce((sum: number, p: any) => sum + (p.live?.today ?? 0), 0)
+
             return (
               <div
                 key={person}
@@ -101,7 +105,10 @@ export function PoolStandings() {
                 <div className="text-xs text-gray-400 mt-1">
                   {personData.score < 0 ? 'under par' : personData.score > 0 ? 'over par' : 'even par'}
                 </div>
-                <div className="text-xs text-gray-500 mt-2">{personData.picks.length} / 8 picks</div>
+                <div className="text-xs font-semibold mt-2" style={{ color: todayScore < 0 ? 'var(--score-red)' : todayScore > 0 ? '#c00' : '#aaa' }}>
+                  Today: {todayScore > 0 ? `+${todayScore}` : todayScore === 0 ? 'E' : todayScore}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">{personData.picks.length} / 8 picks</div>
               </div>
             )
           })}
@@ -170,9 +177,14 @@ export function PoolStandings() {
                           <div className="flex flex-col items-end ml-3 gap-0.5">
                             <ScoreBadge score={live?.total_score ?? null} status={live?.status} />
                             {!isMC && live && (
-                              <span className="text-xs font-mono" style={{ color: contribution < 0 ? 'var(--score-red)' : contribution > 0 ? '#c00' : '#aaa' }}>
-                                {contribution < 0 ? `${contribution} pts` : contribution > 0 ? `+${contribution} pts` : 'E'}
-                              </span>
+                              <>
+                                <span className="text-xs font-mono" style={{ color: contribution < 0 ? 'var(--score-red)' : contribution > 0 ? '#c00' : '#aaa' }}>
+                                  {contribution < 0 ? `${contribution}` : contribution > 0 ? `+${contribution}` : 'E'} total
+                                </span>
+                                <span className="text-xs font-mono" style={{ color: (live.today ?? 0) < 0 ? 'var(--score-red)' : (live.today ?? 0) > 0 ? '#c00' : '#aaa' }}>
+                                  {(live.today ?? 0) > 0 ? `+${live.today}` : (live.today ?? 0) === 0 ? 'E' : live.today} today
+                                </span>
+                              </>
                             )}
                           </div>
                         </div>
