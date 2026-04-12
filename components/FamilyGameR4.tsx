@@ -24,6 +24,7 @@ type GamePick = {
   live_status: string | null
   live_total: number | null
   live_today: number | null
+  live_thru: string | null
   score: number
 }
 
@@ -207,6 +208,7 @@ export function FamilyGameR4() {
                             {moved !== null && moved !== 0 && (
                               <span style={{ color: moved > 0 ? 'var(--masters-green)' : '#c00' }}> ({moved > 0 ? `↑${moved}` : `↓${Math.abs(moved)}`})</span>
                             )}
+                            {pick.live_thru && <span className="ml-1.5 text-gray-300">· Thru {pick.live_thru}</span>}
                           </div>
                         </div>
                         <span className="text-sm font-bold font-mono flex-shrink-0" style={{ color: pick.score > 0 ? 'var(--masters-green)' : pick.score < 0 ? '#c00' : '#aaa' }}>

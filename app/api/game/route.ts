@@ -68,6 +68,7 @@ export async function GET() {
         live_status: live?.status ?? null,
         live_total: live?.total_score ?? null,
         live_today: live?.today ?? null,
+        live_thru: live?.thru ?? null,
         score,
       }
     })
