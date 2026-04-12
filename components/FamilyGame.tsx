@@ -30,7 +30,7 @@ type GamePick = {
 type PlayerEntry = {
   name: string
   r3total: number
-  r4today: number | null
+  r4total: number
   picks: GamePick[]
 }
 
@@ -473,16 +473,16 @@ export function FamilyGame() {
                   <div className="font-semibold capitalize" style={{ fontFamily: 'Georgia, serif' }}>{entry.name}</div>
                   <div className="text-xs text-gray-400">
                     R3: {fmtScore(entry.r3total)}
-                    {entry.r4today !== null && <> · R4 today: {fmtScore(entry.r4today)}</>}
+                    {entry.r4total !== 0 && <> · R4: {fmtScore(entry.r4total)}</>}
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-xl font-bold font-mono" style={{ color: entry.r3total > 0 ? 'var(--masters-green)' : entry.r3total < 0 ? '#c00' : '#aaa', fontFamily: 'Georgia, serif' }}>
                     {fmtScore(entry.r3total)}
                   </div>
-                  {entry.r4today !== null && (
-                    <div className="text-xs font-semibold" style={{ color: entry.r4today < 0 ? 'var(--masters-green)' : entry.r4today > 0 ? '#c00' : '#aaa' }}>
-                      R4: {fmtScore(entry.r4today)}
+                  {entry.r4total !== 0 && (
+                    <div className="text-xs font-semibold" style={{ color: entry.r4total > 0 ? 'var(--masters-green)' : entry.r4total < 0 ? '#c00' : '#aaa' }}>
+                      R4: {fmtScore(entry.r4total)}
                     </div>
                   )}
                 </div>
@@ -506,18 +506,14 @@ export function FamilyGame() {
           <div className="bg-white divide-y" style={{ borderColor: '#ece6d9' }}>
             {r4.submitters.map((playerName) => {
               const playerR4Picks = allPicks.filter((p) => p.player_name === playerName && p.round === 4)
-              const r4sum = playerR4Picks.reduce((s, p) => s + (p.live_total ?? 0), 0)
-              const r4today = playerR4Picks.reduce((s, p) => s + (p.live_today ?? 0), 0)
+              const r4score = Math.round(playerR4Picks.reduce((s, p) => s + p.score, 0) * 10) / 10
               return (
                 <div key={playerName}>
                   <div className="px-4 py-2 flex items-center justify-between" style={{ backgroundColor: '#f8f5ee' }}>
                     <span className="font-semibold capitalize text-sm" style={{ fontFamily: 'Georgia, serif' }}>{playerName}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-gray-400">sum: {fmtScore(r4sum)}</span>
-                      <span className="text-sm font-bold font-mono" style={{ color: r4today < 0 ? 'var(--masters-green)' : r4today > 0 ? '#c00' : '#aaa' }}>
-                        Today: {fmtScore(r4today)}
-                      </span>
-                    </div>
+                    <span className="text-sm font-bold font-mono" style={{ color: r4score > 0 ? 'var(--masters-green)' : r4score < 0 ? '#c00' : '#aaa' }}>
+                      {fmtScore(r4score)}
+                    </span>
                   </div>
                   <div className="divide-y" style={{ borderColor: '#f0ebdf' }}>
                     {playerR4Picks.map((pick) => (

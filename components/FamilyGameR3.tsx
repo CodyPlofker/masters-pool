@@ -31,7 +31,7 @@ type GamePick = {
 type PlayerEntry = {
   name: string
   r3total: number
-  r4today: number | null
+  r4total: number
   picks: GamePick[]
 }
 
