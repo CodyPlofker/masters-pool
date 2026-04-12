@@ -209,6 +209,7 @@ export function FamilyGameR4() {
                               <span style={{ color: moved > 0 ? 'var(--masters-green)' : '#c00' }}> ({moved > 0 ? `↑${moved}` : `↓${Math.abs(moved)}`})</span>
                             )}
                             {pick.live_thru && <span className="ml-1.5 text-gray-300">· Thru {pick.live_thru}</span>}
+                            {pick.live_today !== null && <span className="ml-1.5" style={{ color: pick.live_today < 0 ? 'var(--masters-green)' : pick.live_today > 0 ? '#c00' : '#999' }}>· Today: {fmtScore(pick.live_today)}</span>}
                           </div>
                         </div>
                         <span className="text-sm font-bold font-mono flex-shrink-0" style={{ color: pick.score > 0 ? 'var(--masters-green)' : pick.score < 0 ? '#c00' : '#aaa' }}>
