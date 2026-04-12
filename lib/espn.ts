@@ -46,11 +46,13 @@ export async function fetchMastersLeaderboard(): Promise<LiveScore[]> {
   const currentPeriod: number = competition?.status?.period ?? 0
 
   let scores: LiveScore[] = competitors.map((c: any) => {
-    // Rounds
-    const linescores = c.linescores || []
-    const rounds = linescores
+    // Rounds — parse all round-level linescores
+    const rawLinescores = c.linescores || []
+    const allRoundStrokes = rawLinescores
       .map((l: any) => (l.value !== undefined ? parseInt(l.value) : NaN))
       .filter((n: number) => !isNaN(n))
+    // Filter out 0 (unplayed rounds) for display — 0 strokes is impossible
+    const rounds = allRoundStrokes.filter((n: number) => n > 0)
 
     // Total score to par
     let totalScore = 0
@@ -62,14 +64,22 @@ export async function fetchMastersLeaderboard(): Promise<LiveScore[]> {
       totalScore = isNaN(parsed) ? 0 : parsed
     }
 
-    // Today score
+    // Today score — try ESPN statistics first, then derive from round data
     let today = 0
     const stats = c.statistics || []
     const todayStat = stats.find((s: any) => s.name === 'today' || s.name === 'currentRound')
-    const todayValue = todayStat?.value ?? '0'
-    if (todayValue !== 'E' && todayValue !== 'Even' && todayValue !== '') {
-      const parsed = parseInt(String(todayValue))
-      today = isNaN(parsed) ? 0 : parsed
+    if (todayStat) {
+      const todayValue = todayStat.value ?? '0'
+      if (todayValue !== 'E' && todayValue !== 'Even' && todayValue !== '') {
+        const parsed = parseInt(String(todayValue))
+        today = isNaN(parsed) ? 0 : parsed
+      }
+    } else if (currentPeriod > 0 && allRoundStrokes.length > 0) {
+      // ESPN statistics unavailable — derive today's to-par from total and prior rounds
+      const PAR = 72 // Augusta National
+      const priorRounds = allRoundStrokes.slice(0, currentPeriod - 1).filter((r: number) => r > 0)
+      const priorToPar = priorRounds.reduce((sum: number, r: number) => sum + (r - PAR), 0)
+      today = totalScore - priorToPar
     }
 
     // Status
@@ -85,7 +95,19 @@ export async function fetchMastersLeaderboard(): Promise<LiveScore[]> {
       status = 'complete'
     }
 
-    const thru = c.status?.thru?.toString() || c.status?.period?.toString() || ''
+    // Thru — try ESPN status first, then derive from hole-level linescore data
+    let thru = c.status?.thru?.toString() || c.status?.period?.toString() || ''
+    if (!thru && currentPeriod > 0 && rawLinescores.length >= currentPeriod) {
+      const currentRoundData = rawLinescores[currentPeriod - 1]
+      const holeScores = currentRoundData?.linescores || []
+      const holesPlayed = holeScores.length
+      if (holesPlayed >= 18) {
+        thru = 'F'
+      } else if (holesPlayed > 0) {
+        thru = String(holesPlayed)
+      }
+    }
+
     const pos = c.status?.position?.displayName || c.status?.position?.shortText || ''
 
     return {
