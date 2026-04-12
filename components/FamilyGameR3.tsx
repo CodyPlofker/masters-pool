@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+// Round 3 is complete — this page is results only
 
 type ActiveGolfer = {
   espn_id: string
@@ -59,13 +60,6 @@ export function FamilyGameR3() {
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
-  // Form state
-  const [playerName, setPlayerName] = useState('')
-  const [selectedGolfer, setSelectedGolfer] = useState('')
-  const [direction, setDirection] = useState<'long' | 'short'>('long')
-  const [submitting, setSubmitting] = useState(false)
-  const [msg, setMsg] = useState<string | null>(null)
-
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch('/api/game', { cache: 'no-store' })
@@ -87,52 +81,11 @@ export function FamilyGameR3() {
     return () => clearInterval(interval)
   }, [fetchData])
 
-  const normalizedName = playerName.trim().toLowerCase()
-  const myR3Picks = data
-    ? data.allPicks.filter((p) => p.player_name === normalizedName && p.round === 3)
-    : []
-  const myLongs = myR3Picks.filter((p) => p.direction === 'long').length
-  const myShorts = myR3Picks.filter((p) => p.direction === 'short').length
-  const longDisabled = myLongs >= 2
-  const shortDisabled = myShorts >= 1
-  const picksDone = myR3Picks.length >= 3
-
-  useEffect(() => {
-    if (direction === 'long' && longDisabled && !shortDisabled) setDirection('short')
-    if (direction === 'short' && shortDisabled && !longDisabled) setDirection('long')
-  }, [direction, longDisabled, shortDisabled])
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!playerName.trim() || !selectedGolfer) return
-    setSubmitting(true)
-    setMsg(null)
-    try {
-      const res = await fetch('/api/game/picks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ player_name: playerName.trim(), round: 3, golfer_espn_id: selectedGolfer, direction }),
-      })
-      const json = await res.json()
-      if (!res.ok) {
-        setMsg(`Error: ${json.error}`)
-      } else {
-        setMsg('Pick locked in!')
-        setSelectedGolfer('')
-        await fetchData()
-      }
-    } catch (e: any) {
-      setMsg(`Error: ${e.message}`)
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   if (loading) return <div className="flex items-center justify-center py-20"><div className="text-4xl animate-pulse">⛳</div></div>
   if (error) return <div className="text-center py-10 text-red-600"><p>{error}</p><button onClick={fetchData} className="mt-3 underline text-sm">Retry</button></div>
   if (!data) return null
 
-  const { activeGolfers, leaderboard, allPicks } = data
+  const { leaderboard, allPicks } = data
   const r3Picks = allPicks.filter((p) => p.round === 3)
 
   // Group R3 picks by player
@@ -220,83 +173,6 @@ export function FamilyGameR3() {
           </div>
         </div>
       )}
-
-      {/* Pick form */}
-      <div className="rounded-xl overflow-hidden shadow-sm" style={{ border: '1px solid #d4c9b0' }}>
-        <div className="px-4 py-2.5" style={{ backgroundColor: 'var(--masters-green)' }}>
-          <span className="text-white font-bold text-sm">Make Your Picks</span>
-          <span className="text-xs ml-2" style={{ color: 'var(--masters-gold)' }}>2 longs + 1 short · 3 picks total</span>
-        </div>
-        <form onSubmit={handleSubmit} className="bg-white px-4 py-4 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Your Name</label>
-              <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)}
-                placeholder="e.g. Mom, Dad..." className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none"
-                style={{ borderColor: '#d4c9b0' }} required />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Remaining</label>
-              <div className="text-sm pt-2">
-                {picksDone ? (
-                  <span className="text-gray-400">All 3 picks locked ✓</span>
-                ) : normalizedName ? (
-                  <span style={{ color: 'var(--masters-green)' }}>{2 - myLongs} long{2 - myLongs !== 1 ? 's' : ''} · {1 - myShorts} short</span>
-                ) : (
-                  <span className="text-gray-300">enter name first</span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {!picksDone && (
-            <>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Golfer</label>
-                <select value={selectedGolfer} onChange={(e) => setSelectedGolfer(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ borderColor: '#d4c9b0' }} required>
-                  <option value="">Choose a golfer...</option>
-                  {activeGolfers.map((g) => (
-                    <option key={g.espn_id} value={g.espn_id}>
-                      {g.numericPos ? ordinal(g.numericPos) : '–'} — {g.name} ({fmtScore(g.total_score)})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Direction</label>
-                <div className="flex gap-3">
-                  <button type="button" onClick={() => setDirection('long')} disabled={longDisabled}
-                    className="flex-1 py-2 rounded-lg text-sm font-semibold border-2 transition-all disabled:opacity-30"
-                    style={{ borderColor: direction === 'long' ? 'var(--masters-green)' : '#d4c9b0', backgroundColor: direction === 'long' ? '#eef7f0' : 'white', color: direction === 'long' ? 'var(--masters-green)' : '#666' }}>
-                    ↑ Long (climbs)
-                  </button>
-                  <button type="button" onClick={() => setDirection('short')} disabled={shortDisabled}
-                    className="flex-1 py-2 rounded-lg text-sm font-semibold border-2 transition-all disabled:opacity-30"
-                    style={{ borderColor: direction === 'short' ? '#c00' : '#d4c9b0', backgroundColor: direction === 'short' ? '#fff0f0' : 'white', color: direction === 'short' ? '#c00' : '#666' }}>
-                    ↓ Short (2× penalty if wrong)
-                  </button>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button type="submit" disabled={submitting || !playerName.trim() || !selectedGolfer}
-                  className="px-6 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-40"
-                  style={{ backgroundColor: 'var(--masters-green)' }}>
-                  {submitting ? 'Locking...' : 'Lock In Pick'}
-                </button>
-                {msg && (
-                  <span className="text-sm font-medium" style={{ color: msg.startsWith('Error') ? '#c00' : 'var(--masters-green)' }}>{msg}</span>
-                )}
-              </div>
-            </>
-          )}
-        </form>
-      </div>
-
-      {/* Rules */}
-      <div className="rounded-xl px-4 py-3 text-xs text-gray-500" style={{ backgroundColor: '#f8f8f8', border: '1px solid #e8e0d0' }}>
-        <strong className="text-gray-700">Scoring:</strong> % position change × 100. 60th→20th = +66.7 pts. Shorts pay same formula reversed but 2× penalty if wrong.
-      </div>
 
       {lastUpdated && (
         <p className="text-center text-xs text-gray-400">
