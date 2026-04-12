@@ -7,6 +7,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    await query`DROP TABLE IF EXISTS game_r4_config CASCADE`
     await query`DROP TABLE IF EXISTS game_picks CASCADE`
 
     await query`
@@ -17,13 +18,26 @@ export async function POST(req: NextRequest) {
         golfer_espn_id TEXT NOT NULL,
         golfer_name TEXT NOT NULL,
         starting_position INT NOT NULL,
-        direction TEXT NOT NULL CHECK (direction IN ('long', 'short')),
+        direction TEXT CHECK (direction IN ('long', 'short')),
         created_at TIMESTAMPTZ DEFAULT now(),
         UNIQUE(player_name, round, golfer_espn_id)
       )
     `
 
-    return NextResponse.json({ success: true, message: 'game_picks table created' })
+    await query`
+      CREATE TABLE IF NOT EXISTS game_r4_config (
+        id INT PRIMARY KEY DEFAULT 1,
+        target_sum INT,
+        set_by TEXT,
+        locked_at TIMESTAMPTZ
+      )
+    `
+
+    await query`
+      INSERT INTO game_r4_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING
+    `
+
+    return NextResponse.json({ success: true, message: 'game_picks and game_r4_config tables created' })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
