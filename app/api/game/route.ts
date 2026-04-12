@@ -60,14 +60,8 @@ export async function GET() {
       const live = leaderboard.find(
         (g) => g.espn_id === pick.golfer_espn_id || g.name.toLowerCase() === pick.golfer_name.toLowerCase()
       )
-      let score = 0
-      if (pick.round === 3) {
-        const currentPos = live ? parsePosition(live.position) : null
-        score = calcR3Score(pick, currentPos)
-      } else {
-        // R4: score = today's strokes (lower is better, so negate for leaderboard sort)
-        score = live?.today ?? 0
-      }
+      const currentPos = live ? parsePosition(live.position) : null
+      const score = calcR3Score(pick, currentPos)
       return {
         ...pick,
         current_position: live ? parsePosition(live.position) : null,
@@ -79,17 +73,14 @@ export async function GET() {
     })
 
     // Aggregate by player_name across all rounds
-    // R3: higher score = better. R4: lower today = better — so for combined leaderboard,
-    // we store R4 as negative-today so descending sort still works.
-    const playerMap: Record<string, { name: string; r3total: number; r4today: number | null; picks: any[] }> = {}
+    const playerMap: Record<string, { name: string; r3total: number; r4total: number; picks: any[] }> = {}
     for (const pick of enrichedPicks) {
       const name = pick.player_name
-      if (!playerMap[name]) playerMap[name] = { name, r3total: 0, r4today: null, picks: [] }
+      if (!playerMap[name]) playerMap[name] = { name, r3total: 0, r4total: 0, picks: [] }
       if (pick.round === 3) {
         playerMap[name].r3total = Math.round((playerMap[name].r3total + pick.score) * 10) / 10
       } else {
-        // Sum today's strokes for R4
-        playerMap[name].r4today = (playerMap[name].r4today ?? 0) + (pick.live_today ?? 0)
+        playerMap[name].r4total = Math.round((playerMap[name].r4total + pick.score) * 10) / 10
       }
       playerMap[name].picks.push(pick)
     }
