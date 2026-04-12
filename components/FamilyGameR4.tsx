@@ -157,8 +157,10 @@ export function FamilyGameR4() {
           <div className="bg-white py-8 text-center text-sm text-gray-400">No picks yet</div>
         ) : (
           <div className="bg-white divide-y" style={{ borderColor: '#ece6d9' }}>
-            {leaderboard.filter(e => e.picks.some(p => p.round === 4)).map((entry, i) => {
-              const r4score = Math.round(entry.picks.filter(p => p.round === 4).reduce((s, p) => s + p.score, 0) * 10) / 10
+            {leaderboard.filter(e => e.picks.some(p => p.round === 4))
+              .map(entry => ({ entry, r4score: Math.round(entry.picks.filter(p => p.round === 4).reduce((s, p) => s + p.score, 0) * 10) / 10 }))
+              .sort((a, b) => b.r4score - a.r4score)
+              .map(({ entry, r4score }, i) => {
               return (
                 <div key={entry.name} className="px-5 py-3 flex items-center gap-4">
                   <div className="text-lg font-bold w-6 text-center" style={{ color: i === 0 ? 'var(--masters-gold)' : '#aaa', fontFamily: 'Georgia, serif' }}>{i + 1}</div>
