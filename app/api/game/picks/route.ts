@@ -152,8 +152,8 @@ export async function POST(req: NextRequest) {
 
     const normalizedName = player_name.trim().toLowerCase()
 
-    if (round === 3) return handleR3(body, normalizedName)
-    return handleR4(body, normalizedName)
+    // Both rounds use the same long/short mechanic
+    return handleR3(body, normalizedName)
   } catch (err: any) {
     console.error(err)
     return NextResponse.json({ error: err.message }, { status: 500 })

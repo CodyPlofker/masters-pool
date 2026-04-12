@@ -34,18 +34,10 @@ type PlayerEntry = {
   picks: GamePick[]
 }
 
-type R4Info = {
-  target: number | null
-  setBy: string | null
-  pickedIds: string[]
-  submitters: string[]
-}
-
 type GameData = {
   activeGolfers: ActiveGolfer[]
   leaderboard: PlayerEntry[]
   allPicks: GamePick[]
-  r4: R4Info
   updatedAt: string
 }
 
@@ -67,9 +59,9 @@ export function FamilyGameR4() {
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
-  // Form state
   const [playerName, setPlayerName] = useState('')
-  const [selections, setSelections] = useState<string[]>(['', '', ''])
+  const [selectedGolfer, setSelectedGolfer] = useState('')
+  const [direction, setDirection] = useState<'long' | 'short'>('long')
   const [submitting, setSubmitting] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
 
@@ -94,78 +86,38 @@ export function FamilyGameR4() {
     return () => clearInterval(interval)
   }, [fetchData])
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="text-4xl animate-pulse">⛳</div></div>
-  if (error) return <div className="text-center py-10 text-red-600"><p>{error}</p><button onClick={fetchData} className="mt-3 underline text-sm">Retry</button></div>
-  if (!data) return null
-
-  const { activeGolfers, leaderboard, allPicks, r4 } = data
-  const target = r4.target
   const normalizedName = playerName.trim().toLowerCase()
-  const alreadySubmitted = normalizedName ? r4.submitters.includes(normalizedName) : false
+  const myPicks = data
+    ? data.allPicks.filter((p) => p.player_name === normalizedName && p.round === 4)
+    : []
+  const myLongs = myPicks.filter((p) => p.direction === 'long').length
+  const myShorts = myPicks.filter((p) => p.direction === 'short').length
+  const longDisabled = myLongs >= 2
+  const shortDisabled = myShorts >= 1
+  const picksDone = myPicks.length >= 3
 
-  // Available golfers: active + not already picked by anyone in R4
-  const availableGolfers = activeGolfers.filter((g) => !r4.pickedIds.includes(g.espn_id))
-
-  // Running sum of current selections
-  const selectedGolfers = selections
-    .filter(Boolean)
-    .map((id) => availableGolfers.find((g) => g.espn_id === id))
-    .filter(Boolean) as ActiveGolfer[]
-
-  const runningSum = selectedGolfers.reduce((s, g) => s + g.total_score, 0)
-  const allSelected = selections.every(Boolean)
-  const sumMatches = target === null || runningSum === target
-
-  // For slot N: filter to golfers that could make the target work
-  function getOptionsForSlot(slotIdx: number) {
-    const otherIds = selections.filter((id, i) => i !== slotIdx && id)
-    const otherSum = otherIds.reduce((s, id) => {
-      const g = availableGolfers.find((g) => g.espn_id === id)
-      return s + (g?.total_score ?? 0)
-    }, 0)
-    const remainingSlots = selections.filter((id, i) => i !== slotIdx && !id).length
-
-    return availableGolfers.filter((g) => {
-      if (otherIds.includes(g.espn_id)) return false
-      if (target === null) return true
-      // Last unfilled slot — must land exactly on target
-      if (remainingSlots === 0) return otherSum + g.total_score === target
-      return true
-    })
-  }
-
-  const handleSlotChange = (slotIdx: number, espnId: string) => {
-    const next = [...selections]
-    next[slotIdx] = espnId
-    setSelections(next)
-    setMsg(null)
-  }
+  useEffect(() => {
+    if (direction === 'long' && longDisabled && !shortDisabled) setDirection('short')
+    if (direction === 'short' && shortDisabled && !longDisabled) setDirection('long')
+  }, [direction, longDisabled, shortDisabled])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!playerName.trim() || !allSelected) return
-    if (!sumMatches) {
-      setMsg(`Your picks sum to ${fmtScore(runningSum)}, target is ${fmtScore(target!)}`)
-      return
-    }
+    if (!playerName.trim() || !selectedGolfer) return
     setSubmitting(true)
     setMsg(null)
     try {
       const res = await fetch('/api/game/picks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          player_name: playerName.trim(),
-          round: 4,
-          picks: selections.map((id) => ({ golfer_espn_id: id })),
-        }),
+        body: JSON.stringify({ player_name: playerName.trim(), round: 4, golfer_espn_id: selectedGolfer, direction }),
       })
       const json = await res.json()
       if (!res.ok) {
         setMsg(`Error: ${json.error}`)
       } else {
-        setMsg(target === null ? `Locked! Target set to ${fmtScore(json.sum)}` : 'Picks locked in!')
-        setSelections(['', '', ''])
+        setMsg('Pick locked in!')
+        setSelectedGolfer('')
         await fetchData()
       }
     } catch (e: any) {
@@ -175,97 +127,94 @@ export function FamilyGameR4() {
     }
   }
 
+  if (loading) return <div className="flex items-center justify-center py-20"><div className="text-4xl animate-pulse">⛳</div></div>
+  if (error) return <div className="text-center py-10 text-red-600"><p>{error}</p><button onClick={fetchData} className="mt-3 underline text-sm">Retry</button></div>
+  if (!data) return null
+
+  const { activeGolfers, leaderboard, allPicks } = data
   const r4Picks = allPicks.filter((p) => p.round === 4)
+
   const byPlayer = new Map<string, GamePick[]>()
   for (const pick of r4Picks) {
     const arr = byPlayer.get(pick.player_name) || []
     arr.push(pick)
     byPlayer.set(pick.player_name, arr)
   }
-  const r4PlayerGroups = [...byPlayer.entries()]
-    .map(([name, picks]) => ({
-      name,
-      picks,
-      r4today: picks.reduce((s, p) => s + (p.live_today ?? 0), 0),
-      r4sum: picks.reduce((s, p) => s + (p.live_total ?? 0), 0),
-    }))
-    .sort((a, b) => a.r4today - b.r4today) // lower today = better
+  const playerGroups = [...byPlayer.entries()]
+    .map(([name, picks]) => ({ name, picks, subtotal: Math.round(picks.reduce((s, p) => s + p.score, 0) * 10) / 10 }))
+    .sort((a, b) => b.subtotal - a.subtotal)
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
 
-      {/* Target banner */}
-      {target !== null && (
-        <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{ backgroundColor: '#eef7f0', border: '1px solid #b8dfc4' }}>
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--masters-green)' }}>Target Sum (set by {r4.setBy})</div>
-            <div className="text-3xl font-bold font-mono mt-0.5" style={{ color: 'var(--masters-green)', fontFamily: 'Georgia, serif' }}>
-              {fmtScore(target)}
-            </div>
-          </div>
-          <div className="text-xs text-gray-500 text-right">
-            Pick 3 golfers whose<br />combined score equals this
-          </div>
-        </div>
-      )}
-
-      {/* R4 leaderboard */}
+      {/* Leaderboard */}
       <div className="rounded-2xl overflow-hidden shadow-md" style={{ border: '1px solid #d4c9b0' }}>
         <div className="text-white text-center py-2 text-xs font-semibold tracking-widest uppercase" style={{ backgroundColor: 'var(--masters-green)' }}>
-          Sunday — Lowest R4 Score Wins
+          Round 4 — The Climbers
         </div>
-        {r4PlayerGroups.length === 0 ? (
-          <div className="bg-white py-8 text-center text-sm text-gray-400">
-            {target === null ? 'Waiting for leader to set target…' : 'No picks yet'}
-          </div>
+        {leaderboard.filter(e => e.picks.some(p => p.round === 4)).length === 0 ? (
+          <div className="bg-white py-8 text-center text-sm text-gray-400">No picks yet</div>
         ) : (
           <div className="bg-white divide-y" style={{ borderColor: '#ece6d9' }}>
-            {r4PlayerGroups.map((entry, i) => (
-              <div key={entry.name} className="px-5 py-3 flex items-center gap-4">
-                <div className="text-lg font-bold w-6 text-center" style={{ color: i === 0 ? 'var(--masters-gold)' : '#aaa', fontFamily: 'Georgia, serif' }}>{i + 1}</div>
-                <div className="flex-1">
-                  <div className="font-semibold capitalize" style={{ fontFamily: 'Georgia, serif' }}>{entry.name}</div>
-                  <div className="text-xs text-gray-400">sum going in: {fmtScore(entry.r4sum)}</div>
+            {leaderboard.filter(e => e.picks.some(p => p.round === 4)).map((entry, i) => {
+              const r4score = Math.round(entry.picks.filter(p => p.round === 4).reduce((s, p) => s + p.score, 0) * 10) / 10
+              return (
+                <div key={entry.name} className="px-5 py-3 flex items-center gap-4">
+                  <div className="text-lg font-bold w-6 text-center" style={{ color: i === 0 ? 'var(--masters-gold)' : '#aaa', fontFamily: 'Georgia, serif' }}>{i + 1}</div>
+                  <div className="flex-1">
+                    <div className="font-semibold capitalize" style={{ fontFamily: 'Georgia, serif' }}>{entry.name}</div>
+                    <div className="text-xs text-gray-400">{entry.picks.filter(p => p.round === 4).length} picks</div>
+                  </div>
+                  <div className="text-xl font-bold font-mono" style={{ color: r4score > 0 ? 'var(--masters-green)' : r4score < 0 ? '#c00' : '#aaa', fontFamily: 'Georgia, serif' }}>
+                    {fmtScore(r4score)}
+                  </div>
                 </div>
-                <div className="text-xl font-bold font-mono" style={{ color: entry.r4today < 0 ? 'var(--masters-green)' : entry.r4today > 0 ? '#c00' : '#aaa', fontFamily: 'Georgia, serif' }}>
-                  {fmtScore(entry.r4today)} today
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
 
-      {/* Picks detail */}
-      {r4PlayerGroups.length > 0 && (
+      {/* Picks by player */}
+      {playerGroups.length > 0 && (
         <div className="rounded-xl overflow-hidden shadow-sm" style={{ border: '1px solid #d4c9b0' }}>
           <div className="px-4 py-2.5" style={{ backgroundColor: 'var(--masters-green)' }}>
             <span className="text-white font-bold text-sm">All Picks</span>
           </div>
           <div className="bg-white">
-            {r4PlayerGroups.map((group, gi) => (
+            {playerGroups.map((group, gi) => (
               <div key={group.name} style={{ borderTop: gi > 0 ? '1px solid #d4c9b0' : 'none' }}>
                 <div className="px-4 py-2 flex items-center justify-between" style={{ backgroundColor: '#f8f5ee' }}>
                   <span className="font-semibold capitalize text-sm" style={{ fontFamily: 'Georgia, serif' }}>{group.name}</span>
-                  <span className="text-sm font-bold font-mono" style={{ color: group.r4today < 0 ? 'var(--masters-green)' : group.r4today > 0 ? '#c00' : '#aaa' }}>
-                    {fmtScore(group.r4today)} today
+                  <span className="text-sm font-bold font-mono" style={{ color: group.subtotal > 0 ? 'var(--masters-green)' : group.subtotal < 0 ? '#c00' : '#aaa' }}>
+                    {fmtScore(group.subtotal)}
                   </span>
                 </div>
                 <div className="divide-y" style={{ borderColor: '#f0ebdf' }}>
-                  {group.picks.map((pick) => (
-                    <div key={pick.id} className="px-4 py-2.5 flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-medium" style={{ fontFamily: 'Georgia, serif' }}>{pick.golfer_name}</div>
-                        <div className="text-xs text-gray-400">
-                          {pick.current_position ? ordinal(pick.current_position) : '–'}
-                          {pick.live_total !== null && <> · Total {fmtScore(pick.live_total)}</>}
+                  {group.picks.map((pick) => {
+                    const moved = pick.current_position !== null ? pick.starting_position - pick.current_position : null
+                    const isShort = pick.direction === 'short'
+                    return (
+                      <div key={pick.id} className="px-4 py-2.5 flex items-center gap-3">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold flex-shrink-0"
+                          style={{ backgroundColor: isShort ? '#fff0f0' : '#eef7f0', color: isShort ? '#c00' : 'var(--masters-green)' }}>
+                          {isShort ? '↓ SHORT' : '↑ LONG'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{pick.golfer_name}</div>
+                          <div className="text-xs text-gray-400">
+                            {ordinal(pick.starting_position)} → {pick.current_position ? ordinal(pick.current_position) : '–'}
+                            {moved !== null && moved !== 0 && (
+                              <span style={{ color: moved > 0 ? 'var(--masters-green)' : '#c00' }}> ({moved > 0 ? `↑${moved}` : `↓${Math.abs(moved)}`})</span>
+                            )}
+                          </div>
                         </div>
+                        <span className="text-sm font-bold font-mono flex-shrink-0" style={{ color: pick.score > 0 ? 'var(--masters-green)' : pick.score < 0 ? '#c00' : '#aaa' }}>
+                          {fmtScore(pick.score)}
+                        </span>
                       </div>
-                      <div className="text-sm font-bold font-mono" style={{ color: (pick.live_today ?? 0) < 0 ? 'var(--masters-green)' : (pick.live_today ?? 0) > 0 ? '#c00' : '#aaa' }}>
-                        {pick.live_today !== null ? fmtScore(pick.live_today) : '—'}
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             ))}
@@ -275,80 +224,69 @@ export function FamilyGameR4() {
 
       {/* Pick form */}
       <div className="rounded-xl overflow-hidden shadow-sm" style={{ border: '1px solid #d4c9b0' }}>
-        <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: 'var(--masters-green)' }}>
-          <span className="text-white font-bold text-sm">Make Your R4 Picks</span>
-          {!r4.setBy && <span className="text-xs" style={{ color: 'var(--masters-gold)' }}>Leader picks first — sets the target</span>}
+        <div className="px-4 py-2.5" style={{ backgroundColor: 'var(--masters-green)' }}>
+          <span className="text-white font-bold text-sm">Make Your Picks</span>
+          <span className="text-xs ml-2" style={{ color: 'var(--masters-gold)' }}>2 longs + 1 short · 3 picks total</span>
         </div>
         <form onSubmit={handleSubmit} className="bg-white px-4 py-4 space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Your Name</label>
-            <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)}
-              placeholder="e.g. Mom, Dad..." className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none"
-              style={{ borderColor: '#d4c9b0' }} required />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Your Name</label>
+              <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)}
+                placeholder="e.g. Mom, Dad..." className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none"
+                style={{ borderColor: '#d4c9b0' }} required />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Remaining</label>
+              <div className="text-sm pt-2">
+                {picksDone ? (
+                  <span className="text-gray-400">All 3 picks locked ✓</span>
+                ) : normalizedName ? (
+                  <span style={{ color: 'var(--masters-green)' }}>{2 - myLongs} long{2 - myLongs !== 1 ? 's' : ''} · {1 - myShorts} short</span>
+                ) : (
+                  <span className="text-gray-300">enter name first</span>
+                )}
+              </div>
+            </div>
           </div>
 
-          {alreadySubmitted ? (
-            <div className="text-sm text-gray-400 py-2">Your R4 picks are locked in ✓</div>
-          ) : (
+          {!picksDone && (
             <>
-              {/* Running sum */}
-              <div className="flex items-center justify-between px-3 py-2.5 rounded-lg" style={{ backgroundColor: '#f8f5ee' }}>
-                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Your sum</span>
-                <div className="flex items-center gap-3">
-                  <span className="text-xl font-bold font-mono" style={{ color: allSelected && sumMatches ? 'var(--masters-green)' : '#333', fontFamily: 'Georgia, serif' }}>
-                    {selectedGolfers.length > 0 ? fmtScore(runningSum) : '—'}
-                  </span>
-                  {target !== null && selectedGolfers.length > 0 && !allSelected && (
-                    <span className="text-xs text-gray-400">
-                      need {fmtScore(target - runningSum)} across {3 - selectedGolfers.length} more pick{3 - selectedGolfers.length !== 1 ? 's' : ''}
-                    </span>
-                  )}
-                  {target !== null && allSelected && (
-                    <span className="text-xs font-semibold" style={{ color: sumMatches ? 'var(--masters-green)' : '#c00' }}>
-                      {sumMatches ? '✓ matches target' : `✗ need ${fmtScore(target)}`}
-                    </span>
-                  )}
-                  {target === null && <span className="text-xs text-gray-400">your sum becomes the target</span>}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Golfer</label>
+                <select value={selectedGolfer} onChange={(e) => setSelectedGolfer(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ borderColor: '#d4c9b0' }} required>
+                  <option value="">Choose a golfer...</option>
+                  {activeGolfers.map((g) => (
+                    <option key={g.espn_id} value={g.espn_id}>
+                      {g.numericPos ? ordinal(g.numericPos) : '–'} — {g.name} ({fmtScore(g.total_score)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Direction</label>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setDirection('long')} disabled={longDisabled}
+                    className="flex-1 py-2 rounded-lg text-sm font-semibold border-2 transition-all disabled:opacity-30"
+                    style={{ borderColor: direction === 'long' ? 'var(--masters-green)' : '#d4c9b0', backgroundColor: direction === 'long' ? '#eef7f0' : 'white', color: direction === 'long' ? 'var(--masters-green)' : '#666' }}>
+                    ↑ Long (climbs)
+                  </button>
+                  <button type="button" onClick={() => setDirection('short')} disabled={shortDisabled}
+                    className="flex-1 py-2 rounded-lg text-sm font-semibold border-2 transition-all disabled:opacity-30"
+                    style={{ borderColor: direction === 'short' ? '#c00' : '#d4c9b0', backgroundColor: direction === 'short' ? '#fff0f0' : 'white', color: direction === 'short' ? '#c00' : '#666' }}>
+                    ↓ Short (2× penalty if wrong)
+                  </button>
                 </div>
               </div>
-
-              {/* 3 slots */}
-              {[0, 1, 2].map((slotIdx) => {
-                const opts = getOptionsForSlot(slotIdx)
-                const isLastSlot = selections.filter((id, i) => i !== slotIdx && id).length === 2
-                return (
-                  <div key={slotIdx}>
-                    <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">
-                      Pick {slotIdx + 1}
-                      {target !== null && isLastSlot && (
-                        <span className="ml-2 font-normal normal-case text-gray-400">
-                          ({opts.length} golfer{opts.length !== 1 ? 's' : ''} complete the target)
-                        </span>
-                      )}
-                    </label>
-                    <select value={selections[slotIdx]} onChange={(e) => handleSlotChange(slotIdx, e.target.value)}
-                      className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none" style={{ borderColor: '#d4c9b0' }}>
-                      <option value="">Choose a golfer...</option>
-                      {opts.map((g) => (
-                        <option key={g.espn_id} value={g.espn_id}>
-                          {g.numericPos ? ordinal(g.numericPos) : '–'} — {g.name} ({fmtScore(g.total_score)})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )
-              })}
-
               <div className="flex items-center gap-3">
-                <button type="submit" disabled={submitting || !playerName.trim() || !allSelected || !sumMatches}
+                <button type="submit" disabled={submitting || !playerName.trim() || !selectedGolfer}
                   className="px-6 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-40"
                   style={{ backgroundColor: 'var(--masters-green)' }}>
-                  {submitting ? 'Locking...' : target === null ? 'Set Target & Lock In' : 'Lock In Picks'}
+                  {submitting ? 'Locking...' : 'Lock In Pick'}
                 </button>
                 {msg && (
-                  <span className="text-sm font-medium" style={{ color: msg.startsWith('Error') || msg.includes('sum to') ? '#c00' : 'var(--masters-green)' }}>
-                    {msg}
-                  </span>
+                  <span className="text-sm font-medium" style={{ color: msg.startsWith('Error') ? '#c00' : 'var(--masters-green)' }}>{msg}</span>
                 )}
               </div>
             </>
@@ -356,9 +294,8 @@ export function FamilyGameR4() {
         </form>
       </div>
 
-      {/* Rules */}
       <div className="rounded-xl px-4 py-3 text-xs text-gray-500" style={{ backgroundColor: '#f8f8f8', border: '1px solid #e8e0d0' }}>
-        <strong className="text-gray-700">Rules:</strong> Family game leader picks first — their 3 golfers' combined score going into R4 becomes the target everyone must match. Pick 3 golfers that sum to the same number. Lowest combined R4 strokes wins.
+        <strong className="text-gray-700">Scoring:</strong> % position change × 100. 60th→20th = +66.7 pts. Shorts pay same formula reversed but 2× penalty if wrong.
       </div>
 
       {lastUpdated && (
